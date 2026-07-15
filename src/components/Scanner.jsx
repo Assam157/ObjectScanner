@@ -1,11 +1,19 @@
-import { useState } from "react";
+ import { useEffect, useRef, useState } from "react";
+import "./App.css";
 
-const API_URL = "https://YOUR-RENDER-BACKEND.onrender.com";
+const API_URL = "https://objectscannerbackend.onrender.com";
 
 function Scanner({ onResult }) {
 
     const [selectedImage, setSelectedImage] = useState(null);
     const [loading, setLoading] = useState(false);
+
+    const [cameraOn, setCameraOn] = useState(false);
+    const [facingMode, setFacingMode] = useState("environment");
+
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const streamRef = useRef(null);
 
     const handleFile = (e) => {
 
@@ -13,7 +21,151 @@ function Scanner({ onResult }) {
 
         if (!file) return;
 
+        stopCamera();
+
         setSelectedImage(file);
+
+    };
+
+    const stopCamera = () => {
+
+        if (streamRef.current) {
+
+            streamRef.current.getTracks().forEach(track => track.stop());
+
+            streamRef.current = null;
+
+        }
+
+        if (videoRef.current) {
+
+            videoRef.current.srcObject = null;
+
+        }
+
+        setCameraOn(false);
+
+    };
+
+    const startCamera = async () => {
+
+        stopCamera();
+
+        setSelectedImage(null);
+
+        setCameraOn(true);
+
+    };
+
+    useEffect(() => {
+
+        if (!cameraOn) return;
+
+        const openCamera = async () => {
+
+            try {
+
+                const stream = await navigator.mediaDevices.getUserMedia({
+
+                    video: {
+
+                        facingMode: facingMode
+
+                    },
+
+                    audio: false
+
+                });
+
+                streamRef.current = stream;
+
+                if (videoRef.current) {
+
+                    videoRef.current.srcObject = stream;
+
+                    await videoRef.current.play();
+
+                }
+
+            }
+
+            catch (err) {
+
+                console.error(err);
+
+                alert("Unable to access camera.");
+
+                stopCamera();
+
+            }
+
+        };
+
+        openCamera();
+
+        return () => {
+
+            if (streamRef.current) {
+
+                streamRef.current.getTracks().forEach(track => track.stop());
+
+            }
+
+        };
+
+    }, [cameraOn, facingMode]);
+
+    useEffect(() => {
+
+        return () => stopCamera();
+
+    }, []);
+
+    const captureImage = () => {
+
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+
+        if (!video || !canvas) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const ctx = canvas.getContext("2d");
+
+        ctx.drawImage(video, 0, 0);
+
+        canvas.toBlob(
+
+            (blob) => {
+
+                if (!blob) return;
+
+                const file = new File(
+
+                    [blob],
+
+                    "capture.jpg",
+
+                    {
+
+                        type: "image/jpeg"
+
+                    }
+
+                );
+
+                setSelectedImage(file);
+
+                stopCamera();
+
+            },
+
+            "image/jpeg",
+
+            0.95
+
+        );
 
     };
 
@@ -21,7 +173,7 @@ function Scanner({ onResult }) {
 
         if (!selectedImage) {
 
-            alert("Please select an image first.");
+            alert("Please upload or capture an image first.");
 
             return;
 
@@ -34,8 +186,11 @@ function Scanner({ onResult }) {
             const formData = new FormData();
 
             formData.append(
+
                 "image",
+
                 selectedImage
+
             );
 
             const response = await fetch(
@@ -43,8 +198,11 @@ function Scanner({ onResult }) {
                 `${API_URL}/detect`,
 
                 {
+
                     method: "POST",
+
                     body: formData
+
                 }
 
             );
@@ -83,11 +241,7 @@ function Scanner({ onResult }) {
 
                 <p>
 
-                    Upload or capture an image.
-
-                    Our AI detects
-
-                    Chairs and Monitors instantly.
+                    Upload an image or use the live camera.
 
                 </p>
 
@@ -97,7 +251,7 @@ function Scanner({ onResult }) {
 
                 <h2>
 
-                    Upload Image
+                    Upload or Capture
 
                 </h2>
 
@@ -109,8 +263,6 @@ function Scanner({ onResult }) {
 
                     accept="image/*"
 
-                    capture="environment"
-
                     onChange={handleFile}
 
                 />
@@ -121,17 +273,159 @@ function Scanner({ onResult }) {
 
                 {
 
-                    selectedImage &&
+                    !cameraOn &&
 
-                    <img
+                    <button
 
-                        className="preview"
+                        onClick={startCamera}
 
-                        src={URL.createObjectURL(selectedImage)}
+                    >
 
-                        alt="Preview"
+                        📷 Open Camera
 
-                    />
+                    </button>
+
+                }
+
+                {
+
+                    cameraOn &&
+
+                    <>
+
+                        <br />
+
+                        <br />
+
+                        <video
+
+                            ref={videoRef}
+
+                            autoPlay
+
+                            playsInline
+
+                            muted
+
+                            className="preview"
+
+                            style={{
+
+                                width: "100%",
+
+                                maxWidth: "500px",
+
+                                background: "#000",
+
+                                borderRadius: "12px"
+
+                            }}
+
+                        />
+
+                        <br />
+
+                        <br />
+
+                        <div
+
+                            style={{
+
+                                display: "flex",
+
+                                gap: "10px",
+
+                                justifyContent: "center",
+
+                                flexWrap: "wrap"
+
+                            }}
+
+                        >
+
+                            <button
+
+                                onClick={captureImage}
+
+                            >
+
+                                📸 Capture
+
+                            </button>
+
+                            <button
+
+                                onClick={() =>
+
+                                    setFacingMode(
+
+                                        prev =>
+
+                                            prev === "environment"
+
+                                                ? "user"
+
+                                                : "environment"
+
+                                    )
+
+                                }
+
+                            >
+
+                                🔄 Switch Camera
+
+                            </button>
+
+                            <button
+
+                                onClick={stopCamera}
+
+                            >
+
+                                ❌ Close
+
+                            </button>
+
+                        </div>
+
+                    </>
+
+                }
+
+                <canvas
+
+                    ref={canvasRef}
+
+                    style={{
+
+                        display: "none"
+
+                    }}
+
+                />
+
+                {
+
+                    selectedImage && !cameraOn &&
+
+                    <>
+
+                        <br />
+
+                        <br />
+
+                        <img
+
+                            src={URL.createObjectURL(selectedImage)}
+
+                            alt="Preview"
+
+                            className="preview"
+
+                        />
+
+                    </>
 
                 }
 
@@ -151,13 +445,9 @@ function Scanner({ onResult }) {
 
                         loading
 
-                        ?
+                            ? "Scanning..."
 
-                        "Scanning..."
-
-                        :
-
-                        "🔍 Scan Image"
+                            : "🔍 Scan Image"
 
                     }
 
@@ -177,15 +467,15 @@ function Scanner({ onResult }) {
 
                 <p>
 
-                    📷 Capture or upload an image
+                    📷 Upload or capture an image.
 
                     <br /><br />
 
-                    🤖 YOLO detects the object
+                    🤖 YOLO detects objects.
 
                     <br /><br />
 
-                    📄 Information page opens automatically
+                    📄 Information opens automatically.
 
                 </p>
 
