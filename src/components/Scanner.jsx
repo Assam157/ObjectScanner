@@ -487,4 +487,4 @@ function Scanner({ onResult }) {
 
 }
 
-export default Scanner;  here is canner.jsx please debug
+export default Scanner;   
