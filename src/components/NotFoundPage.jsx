@@ -1,4 +1,4 @@
-function NotFoundPage({ goHome }) {
+ function NotFoundPage({ goHome }) {
 
     return (
 
@@ -7,27 +7,40 @@ function NotFoundPage({ goHome }) {
             <div className="hero">
 
                 <h1>
-
                     ❌ No Supported Object Detected
-
                 </h1>
 
                 <p>
-
-                    The AI could not detect a Chair or a Monitor
-                    in the uploaded image.
-
+                    The AI could not confidently detect any supported object.
                 </p>
 
             </div>
 
             <div className="card">
 
-                <h2>
+                <h2>Supported Objects</h2>
 
-                    Possible Reasons
+                <br />
 
-                </h2>
+                <ul>
+
+                    <li>🪑 Chair</li>
+
+                    <li>🖥️ Monitor</li>
+
+                    <li>🔨 Hammer</li>
+
+                    <li>✂️ Scissor</li>
+
+                    <li>🥄 Spoon</li>
+
+                </ul>
+
+            </div>
+
+            <div className="card">
+
+                <h2>Possible Reasons</h2>
 
                 <br />
 
@@ -41,7 +54,7 @@ function NotFoundPage({ goHome }) {
 
                     <li>The confidence score was below the threshold.</li>
 
-                    <li>The uploaded object is not supported.</li>
+                    <li>The object is not one of the supported classes.</li>
 
                 </ul>
 
@@ -49,25 +62,21 @@ function NotFoundPage({ goHome }) {
 
             <div className="card">
 
-                <h2>
-
-                    Tips for Better Detection
-
-                </h2>
+                <h2>Tips for Better Detection</h2>
 
                 <br />
 
                 <ul>
 
-                    <li>📷 Capture the entire object.</li>
+                    <li>📷 Capture the complete object.</li>
 
-                    <li>💡 Ensure good lighting.</li>
+                    <li>💡 Use good lighting.</li>
 
                     <li>📏 Move closer to the object.</li>
 
-                    <li>🖼 Use a higher resolution image.</li>
+                    <li>🖼 Use a clear, high-resolution image.</li>
 
-                    <li>🚫 Avoid excessive blur or glare.</li>
+                    <li>🚫 Avoid blur and reflections.</li>
 
                 </ul>
 
@@ -81,12 +90,8 @@ function NotFoundPage({ goHome }) {
                 }}
             >
 
-                <button
-                    onClick={goHome}
-                >
-
-                    🔄 Try Another Image
-
+                <button onClick={goHome}>
+                    🔄 Scan Another Image
                 </button>
 
             </div>
