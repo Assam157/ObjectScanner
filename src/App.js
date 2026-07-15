@@ -3,6 +3,9 @@
 import Scanner from "./components/Scanner";
 import ChairPage from "./components/ChairPage";
 import MonitorPage from "./components/MonitorPage";
+import HammerPage from "./components/HammerPage";
+import ScissorPage from "./components/ScissorPage";
+import SpoonPage from "./components/SpoonPage";
 import NotFoundPage from "./components/NotFoundPage";
 
 import "./App.css";
@@ -21,7 +24,7 @@ function App() {
 
     setResult(data);
 
-    switch (data.object) {
+    switch ((data.object || "").toLowerCase()) {
 
       case "chair":
         setPage("chair");
@@ -33,8 +36,22 @@ function App() {
         setPage("monitor");
         break;
 
+      case "hammer":
+        setPage("hammer");
+        break;
+
+      case "scissor":
+      case "scissors":
+        setPage("scissor");
+        break;
+
+      case "spoon":
+        setPage("spoon");
+        break;
+
       default:
         setPage("notfound");
+        break;
 
     }
 
@@ -64,6 +81,33 @@ function App() {
       {page === "monitor" && (
 
         <MonitorPage
+          result={result}
+          goHome={() => setPage("scanner")}
+        />
+
+      )}
+
+      {page === "hammer" && (
+
+        <HammerPage
+          result={result}
+          goHome={() => setPage("scanner")}
+        />
+
+      )}
+
+      {page === "scissor" && (
+
+        <ScissorPage
+          result={result}
+          goHome={() => setPage("scanner")}
+        />
+
+      )}
+
+      {page === "spoon" && (
+
+        <SpoonPage
           result={result}
           goHome={() => setPage("scanner")}
         />
