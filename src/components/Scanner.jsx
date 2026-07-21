@@ -13,7 +13,7 @@ const LOCAL_BASE_URL =
 
 const FALLBACK_BASE_URL = "https://objectscannerbackend.onrender.com";
 const LOCAL_TIMEOUT_MS = 25000;
-const CLOUD_TIMEOUT_MS = 30000; // added cloud timeout
+const CLOUD_TIMEOUT_MS = 30000;
 
 // =============================================
 
@@ -23,13 +23,14 @@ function Scanner({ onResult }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
   const [stream, setStream] = useState(null);
+  const [cameraError, setCameraError] = useState(null);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const fileInputRef = useRef(null); // to reset the input
+  const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  // Clean up object URL to avoid memory leaks
+  // Clean up object URL
   useEffect(() => {
     return () => {
       if (selectedImage) {
@@ -61,27 +62,79 @@ function Scanner({ onResult }) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Revoke old preview URL if any
     if (selectedImage) {
       URL.revokeObjectURL(selectedImage.previewUrl);
     }
 
-    // Store file with a preview URL
     const previewUrl = URL.createObjectURL(file);
     setSelectedImage({ file, previewUrl });
+    setCameraError(null);
   };
 
   const startCamera = useCallback(async () => {
+    setCameraError(null);
+    setStatusMessage("");
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const msg = "Your browser does not support camera access.";
+      setCameraError(msg);
+      alert("❌ " + msg);
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      setStatusMessage("⚠️ Camera works best with HTTPS. If this fails, try using HTTPS.");
+    }
+
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+        video: {
+          facingMode: "environment",
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
       });
-      videoRef.current.srcObject = mediaStream;
-      setStream(mediaStream);
-      setCameraOn(true);
+
+      // videoRef.current is guaranteed to exist because the video element is always rendered
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        setStream(mediaStream);
+        setCameraOn(true);
+        setCameraError(null);
+        setStatusMessage("📷 Camera ready");
+        setTimeout(() => setStatusMessage(""), 2000);
+      } else {
+        throw new Error("Video element not found (ref is null).");
+      }
     } catch (err) {
-      console.error(err);
-      alert("Unable to access camera. Please check permissions.");
+      console.error("Camera error:", err);
+      let userMsg = "Unable to access camera. ";
+      switch (err.name) {
+        case "NotAllowedError":
+        case "PermissionDeniedError":
+          userMsg +=
+            "Permission denied. Please allow camera access in browser settings and reload.";
+          break;
+        case "NotFoundError":
+        case "DevicesNotFoundError":
+          userMsg += "No camera found on this device.";
+          break;
+        case "NotReadableError":
+        case "TrackStartError":
+          userMsg += "Camera is busy or not readable.";
+          break;
+        case "OverconstrainedError":
+          userMsg += "Could not use the back camera. Try using the front camera.";
+          break;
+        case "SecurityError":
+          userMsg += "Camera access blocked due to security (HTTPS required).";
+          break;
+        default:
+          userMsg += err.message || "Unknown error.";
+      }
+      setCameraError(userMsg);
+      alert("❌ " + userMsg);
+      setStatusMessage("⚠️ " + userMsg);
     }
   }, []);
 
@@ -89,14 +142,19 @@ function Scanner({ onResult }) {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null; // release the stream
+    }
     setStream(null);
     setCameraOn(false);
+    setCameraError(null);
+    setStatusMessage("");
   }, [stream]);
 
   const capturePhoto = useCallback(() => {
     const video = videoRef.current;
     if (!video || video.readyState < 2) {
-      alert("Camera is not ready. Please wait.");
+      alert("Camera is not ready yet. Please wait.");
       return;
     }
 
@@ -113,13 +171,12 @@ function Scanner({ onResult }) {
           return;
         }
         const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-        // Revoke previous preview
         if (selectedImage) {
           URL.revokeObjectURL(selectedImage.previewUrl);
         }
         const previewUrl = URL.createObjectURL(file);
         setSelectedImage({ file, previewUrl });
-        stopCamera();
+        stopCamera(); // stop camera after capture
       },
       "image/jpeg",
       0.95
@@ -135,7 +192,6 @@ function Scanner({ onResult }) {
     setLoading(true);
     setStatusMessage("📡 Connecting to local backend...");
 
-    // Cancel any ongoing request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -171,7 +227,6 @@ function Scanner({ onResult }) {
       console.warn("Local backend failed:", error.message);
       setStatusMessage("☁️ Local unavailable. Trying cloud backend...");
 
-      // Try cloud with its own timeout
       const cloudTimeout = setTimeout(() => {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -244,26 +299,42 @@ function Scanner({ onResult }) {
           </button>
         )}
 
+        {/* Video element is always rendered, but hidden when camera is off */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          style={{
+            width: "100%",
+            maxWidth: "450px",
+            borderRadius: "12px",
+            display: cameraOn ? "block" : "none",
+          }}
+        />
+
         {cameraOn && (
-          <div>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              style={{
-                width: "100%",
-                maxWidth: "450px",
-                borderRadius: "12px",
-              }}
-            />
-            <br />
-            <br />
+          <div style={{ marginTop: "10px" }}>
             <button onClick={capturePhoto}>📸 Capture</button>
             <button onClick={stopCamera} style={{ marginLeft: "10px" }}>
               ❌ Close
             </button>
+          </div>
+        )}
+
+        {/* Show camera error and a retry button */}
+        {cameraError && !cameraOn && (
+          <div style={{ color: "red", marginBottom: "10px", marginTop: "10px" }}>
+            ⚠️ {cameraError}
             <br />
-            <br />
+            <button
+              onClick={() => {
+                setCameraError(null);
+                startCamera();
+              }}
+              style={{ marginTop: "5px" }}
+            >
+              🔄 Retry
+            </button>
           </div>
         )}
 
