@@ -4,81 +4,29 @@
 // CONFIGURATION
 // =============================================
 
-// Use the cloud backend directly.
-// You can override this with an environment variable if needed.
 const BACKEND_URL =
   process.env.REACT_APP_BACKEND_URL ||
-  " https://ascent-halt-glorify.ngrok-free.dev";
+  "https://ascent-halt-glorify.ngrok-free.dev";
 
 // =============================================
 
-function Scanner({ onResult }) {
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [cameraOn, setCameraOn] = useState(false);
+function Scanner({ onResult, onCapture, isScanning }) {
   const [stream, setStream] = useState(null);
   const [cameraError, setCameraError] = useState(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  // Clean up object URL
-  useEffect(() => {
-    return () => {
-      if (selectedImage) {
-        URL.revokeObjectURL(selectedImage.previewUrl);
-      }
-    };
-  }, [selectedImage]);
-
-  // Clean up stream on unmount
-  useEffect(() => {
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, [stream]);
-
-  // Clean up abort controller on unmount
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (selectedImage) {
-      URL.revokeObjectURL(selectedImage.previewUrl);
-    }
-
-    const previewUrl = URL.createObjectURL(file);
-    setSelectedImage({ file, previewUrl });
-    setCameraError(null);
-  };
-
+  // ---------- Camera start ----------
   const startCamera = useCallback(async () => {
     setCameraError(null);
-    setStatusMessage("");
+    setIsCameraReady(false);
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      const msg = "Your browser does not support camera access.";
-      setCameraError(msg);
-      alert("❌ " + msg);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Your browser does not support camera access.");
       return;
-    }
-
-    if (!window.isSecureContext) {
-      setStatusMessage("⚠️ Camera works best with HTTPS. If this fails, try using HTTPS.");
     }
 
     try {
@@ -93,12 +41,10 @@ function Scanner({ onResult }) {
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         setStream(mediaStream);
-        setCameraOn(true);
+        setIsCameraReady(true);
         setCameraError(null);
-        setStatusMessage("📷 Camera ready");
-        setTimeout(() => setStatusMessage(""), 2000);
       } else {
-        throw new Error("Video element not found (ref is null).");
+        throw new Error("Video element not found.");
       }
     } catch (err) {
       console.error("Camera error:", err);
@@ -106,94 +52,68 @@ function Scanner({ onResult }) {
       switch (err.name) {
         case "NotAllowedError":
         case "PermissionDeniedError":
-          userMsg +=
-            "Permission denied. Please allow camera access in browser settings and reload.";
+          userMsg += "Permission denied. Please allow camera access and reload.";
           break;
         case "NotFoundError":
-        case "DevicesNotFoundError":
           userMsg += "No camera found on this device.";
-          break;
-        case "NotReadableError":
-        case "TrackStartError":
-          userMsg += "Camera is busy or not readable.";
-          break;
-        case "OverconstrainedError":
-          userMsg += "Could not use the back camera. Try using the front camera.";
-          break;
-        case "SecurityError":
-          userMsg += "Camera access blocked due to security (HTTPS required).";
           break;
         default:
           userMsg += err.message || "Unknown error.";
       }
       setCameraError(userMsg);
-      alert("❌ " + userMsg);
-      setStatusMessage("⚠️ " + userMsg);
     }
   }, []);
 
+  // ---------- Stop camera ----------
   const stopCamera = useCallback(() => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    setStream(null);
-    setCameraOn(false);
-    setCameraError(null);
-    setStatusMessage("");
+    setIsCameraReady(false);
   }, [stream]);
 
-  const capturePhoto = useCallback(() => {
+  // ---------- Capture & scan ----------
+  const captureAndScan = useCallback(async () => {
     const video = videoRef.current;
     if (!video || video.readyState < 2) {
-      alert("Camera is not ready yet. Please wait.");
+      alert("Camera not ready. Please wait.");
       return;
     }
 
+    // Capture image to canvas
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0);
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          alert("Failed to capture image.");
-          return;
-        }
-        const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-        if (selectedImage) {
-          URL.revokeObjectURL(selectedImage.previewUrl);
-        }
-        const previewUrl = URL.createObjectURL(file);
-        setSelectedImage({ file, previewUrl });
-        stopCamera();
-      },
-      "image/jpeg",
-      0.95
+    // Convert to blob and create file
+    const blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.95)
     );
-  }, [selectedImage, stopCamera]);
-
-  const scanImage = useCallback(async () => {
-    if (!selectedImage) {
-      alert("Please select an image first.");
+    if (!blob) {
+      alert("Failed to capture image.");
       return;
     }
+    const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
 
-    setLoading(true);
-    setStatusMessage("☁️ Connecting to cloud backend...");
+    // Tell parent that scanning started
+    if (onCapture) onCapture();
 
+    // Prepare form data
+    const formData = new FormData();
+    formData.append("image", file);
+
+    // Abort controller for cancellation
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
-
-    const formData = new FormData();
-    formData.append("image", selectedImage.file);
 
     try {
       const response = await fetch(`${BACKEND_URL}/detect`, {
@@ -203,156 +123,85 @@ function Scanner({ onResult }) {
       });
 
       if (!response.ok) {
-        throw new Error(`Cloud server error: ${response.status}`);
+        throw new Error(`Server error: ${response.status}`);
       }
 
       const data = await response.json();
-      setLoading(false);
-      setStatusMessage("✅ Connected to cloud backend");
-      setTimeout(() => setStatusMessage(""), 3000);
       onResult(data);
     } catch (error) {
-      console.error(error);
-      setLoading(false);
-      setStatusMessage("");
-      alert("❌ Unable to reach the cloud backend. Please check your internet connection.");
+      console.error("Scan error:", error);
+      alert("❌ Scan failed. Check your connection or try again.");
+      // Optionally call onResult with null to reset
+      if (onResult) onResult(null);
     } finally {
       abortControllerRef.current = null;
+      // Parent will handle isScanning via prop – we don't set it here
     }
-  }, [selectedImage, onResult]);
+  }, [onCapture, onResult]);
 
-  const resetFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
+  // ---------- Auto-start camera on mount ----------
+  useEffect(() => {
+    startCamera();
+    return () => {
+      stopCamera();
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // ---------- Render ----------
   return (
-    <div className="container">
-      <div className="hero">
-        <h1>🧠 AI Object Scanner</h1>
-        <p>
-          Upload or capture an image.
-          <br />
-          <br />
-          Our AI detects Chairs and Monitors instantly.
-        </p>
-      </div>
-
-      <div className="card">
-        <h2>Upload Image</h2>
-        <br />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFile}
-        />
-        <br />
-        <br />
-
-        {!cameraOn && (
-          <button onClick={startCamera} style={{ marginBottom: "15px" }}>
-            📷 Open Camera
-          </button>
-        )}
-
+    <div className="scanner-container">
+      <div className="camera-wrapper">
+        {/* Video feed */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          style={{
-            width: "100%",
-            maxWidth: "450px",
-            borderRadius: "12px",
-            display: cameraOn ? "block" : "none",
-          }}
+          className="camera-feed"
+          style={{ display: isCameraReady ? "block" : "none" }}
         />
 
-        {cameraOn && (
-          <div style={{ marginTop: "10px" }}>
-            <button onClick={capturePhoto}>📸 Capture</button>
-            <button onClick={stopCamera} style={{ marginLeft: "10px" }}>
-              ❌ Close
+        {/* Fallback when camera is off or error */}
+        {!isCameraReady && !cameraError && (
+          <div className="camera-placeholder">
+            <div className="spinner-small"></div>
+            <p>Starting camera…</p>
+          </div>
+        )}
+
+        {cameraError && (
+          <div className="camera-error">
+            <p>⚠️ {cameraError}</p>
+            <button onClick={startCamera} className="retry-btn">
+              Retry
             </button>
           </div>
         )}
 
-        {cameraError && !cameraOn && (
-          <div style={{ color: "red", marginBottom: "10px", marginTop: "10px" }}>
-            ⚠️ {cameraError}
-            <br />
-            <button
-              onClick={() => {
-                setCameraError(null);
-                startCamera();
-              }}
-              style={{ marginTop: "5px" }}
-            >
-              🔄 Retry
-            </button>
+        {/* Scanning overlay (controlled by parent via isScanning) */}
+        {isScanning && (
+          <div className="scan-overlay">
+            <div className="spinner"></div>
+            <p>Scanning…</p>
           </div>
         )}
-
-        <canvas ref={canvasRef} style={{ display: "none" }} />
-
-        <br />
-        <br />
-
-        {selectedImage && (
-          <img
-            className="preview"
-            src={selectedImage.previewUrl}
-            alt="Preview"
-          />
-        )}
-
-        <br />
-        <br />
-
-        {statusMessage && (
-          <p
-            style={{
-              color: "#666",
-              fontStyle: "italic",
-              marginBottom: "10px",
-            }}
-          >
-            {statusMessage}
-          </p>
-        )}
-
-        <button onClick={scanImage} disabled={loading}>
-          {loading ? "Scanning..." : "🔍 Scan Image"}
-        </button>
-
-        <button
-          onClick={() => {
-            if (selectedImage) {
-              URL.revokeObjectURL(selectedImage.previewUrl);
-              setSelectedImage(null);
-              resetFileInput();
-            }
-          }}
-          style={{ marginLeft: "10px" }}
-        >
-          Clear Image
-        </button>
       </div>
 
-      <div className="card">
-        <h2>How it Works</h2>
-        <br />
-        <p>
-          📷 Capture or upload an image
-          <br />
-          <br />
-          🤖 YOLO detects the object
-          <br />
-          <br />
-          📄 Information page opens automatically
-        </p>
-      </div>
+      {/* Capture button – round, disabled while scanning */}
+      <button
+        className="capture-btn"
+        onClick={captureAndScan}
+        disabled={isScanning || !isCameraReady}
+      >
+        <span className="capture-circle"></span>
+      </button>
+
+      {/* Hidden canvas for capture */}
+      <canvas ref={canvasRef} style={{ display: "none" }} />
     </div>
   );
 }
