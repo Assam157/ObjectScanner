@@ -1,19 +1,14 @@
-  import { useState, useRef, useEffect, useCallback } from "react";
+ import { useState, useRef, useEffect, useCallback } from "react";
 
 // =============================================
 // CONFIGURATION
 // =============================================
 
-const LOCAL_BASE_URL =
-  process.env.REACT_APP_LOCAL_URL ||
-  (window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1"
-    ? "http://localhost:5000"
-    : `${window.location.protocol}//${window.location.hostname}:5000`);
-
-const FALLBACK_BASE_URL = "https://objectscannerbackend.onrender.com";
-const LOCAL_TIMEOUT_MS = 25000;
-const CLOUD_TIMEOUT_MS = 30000;
+// Use the cloud backend directly.
+// You can override this with an environment variable if needed.
+const BACKEND_URL =
+  process.env.REACT_APP_BACKEND_URL ||
+  "https://objectscannerbackend.onrender.com";
 
 // =============================================
 
@@ -95,7 +90,6 @@ function Scanner({ onResult }) {
         },
       });
 
-      // videoRef.current is guaranteed to exist because the video element is always rendered
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         setStream(mediaStream);
@@ -143,7 +137,7 @@ function Scanner({ onResult }) {
       stream.getTracks().forEach((track) => track.stop());
     }
     if (videoRef.current) {
-      videoRef.current.srcObject = null; // release the stream
+      videoRef.current.srcObject = null;
     }
     setStream(null);
     setCameraOn(false);
@@ -176,7 +170,7 @@ function Scanner({ onResult }) {
         }
         const previewUrl = URL.createObjectURL(file);
         setSelectedImage({ file, previewUrl });
-        stopCamera(); // stop camera after capture
+        stopCamera();
       },
       "image/jpeg",
       0.95
@@ -190,7 +184,7 @@ function Scanner({ onResult }) {
     }
 
     setLoading(true);
-    setStatusMessage("📡 Connecting to local backend...");
+    setStatusMessage("☁️ Connecting to cloud backend...");
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -201,65 +195,29 @@ function Scanner({ onResult }) {
     const formData = new FormData();
     formData.append("image", selectedImage.file);
 
-    const localTimeout = setTimeout(() => {
-      controller.abort();
-    }, LOCAL_TIMEOUT_MS);
-
     try {
-      const response = await fetch(`${LOCAL_BASE_URL}/detect`, {
+      const response = await fetch(`${BACKEND_URL}/detect`, {
         method: "POST",
         body: formData,
         signal: controller.signal,
       });
-      clearTimeout(localTimeout);
 
       if (!response.ok) {
-        throw new Error(`Local server error: ${response.status}`);
+        throw new Error(`Cloud server error: ${response.status}`);
       }
 
       const data = await response.json();
-      setStatusMessage("");
       setLoading(false);
+      setStatusMessage("✅ Connected to cloud backend");
+      setTimeout(() => setStatusMessage(""), 3000);
       onResult(data);
-      return;
     } catch (error) {
-      clearTimeout(localTimeout);
-      console.warn("Local backend failed:", error.message);
-      setStatusMessage("☁️ Local unavailable. Trying cloud backend...");
-
-      const cloudTimeout = setTimeout(() => {
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-      }, CLOUD_TIMEOUT_MS);
-
-      try {
-        const response = await fetch(`${FALLBACK_BASE_URL}/detect`, {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        });
-        clearTimeout(cloudTimeout);
-
-        if (!response.ok) {
-          throw new Error(`Cloud server error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setLoading(false);
-        setStatusMessage("☁️ Connected to cloud backend");
-        setTimeout(() => setStatusMessage(""), 3000);
-        onResult(data);
-        return;
-      } catch (fallbackError) {
-        clearTimeout(cloudTimeout);
-        console.error(fallbackError);
-        setLoading(false);
-        setStatusMessage("");
-        alert("❌ Unable to reach both the local and cloud backends.");
-      } finally {
-        abortControllerRef.current = null;
-      }
+      console.error(error);
+      setLoading(false);
+      setStatusMessage("");
+      alert("❌ Unable to reach the cloud backend. Please check your internet connection.");
+    } finally {
+      abortControllerRef.current = null;
     }
   }, [selectedImage, onResult]);
 
@@ -299,7 +257,6 @@ function Scanner({ onResult }) {
           </button>
         )}
 
-        {/* Video element is always rendered, but hidden when camera is off */}
         <video
           ref={videoRef}
           autoPlay
@@ -321,7 +278,6 @@ function Scanner({ onResult }) {
           </div>
         )}
 
-        {/* Show camera error and a retry button */}
         {cameraError && !cameraOn && (
           <div style={{ color: "red", marginBottom: "10px", marginTop: "10px" }}>
             ⚠️ {cameraError}
