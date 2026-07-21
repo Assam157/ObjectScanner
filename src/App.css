@@ -489,3 +489,210 @@ button{
 }
 
 .btn-round:hover { background: #334155; }
+
+/* ---- Scanning line overlay (blue lines) ---- */
+.scanning-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* allows clicking through to the video if needed */
+  z-index: 2;
+}
+
+/* The moving blue line */
+.scanning-line {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3b82f6, #60a5fa, #3b82f6, transparent);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
+  animation: scanMove 2.5s ease-in-out infinite;
+  top: 0;
+}
+
+/* Corner brackets */
+.corner {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(59, 130, 246, 0.8);
+  border-radius: 2px;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.corner.top-left {
+  top: 15px;
+  left: 15px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.corner.top-right {
+  top: 15px;
+  right: 15px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.corner.bottom-left {
+  bottom: 15px;
+  left: 15px;
+  border-right: none;
+  border-top: none;
+}
+
+.corner.bottom-right {
+  bottom: 15px;
+  right: 15px;
+  border-left: none;
+  border-top: none;
+}
+
+/* Animation: line moves from top to bottom */
+@keyframes scanMove {
+  0% {
+    top: 0;
+    opacity: 0.3;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0.3;
+  }
+}
+/* ===== Scanner Overlay with Grid + Hue ===== */
+
+.scanning-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* allow tap on capture button */
+  z-index: 2;
+  overflow: hidden;
+}
+
+/* ---- Grid pattern (blue lines) ---- */
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    /* Vertical lines */
+    repeating-linear-gradient(
+      90deg,
+      rgba(59, 130, 246, 0.15) 0px,
+      rgba(59, 130, 246, 0.15) 1px,
+      transparent 1px,
+      transparent 40px
+    ),
+    /* Horizontal lines */
+    repeating-linear-gradient(
+      0deg,
+      rgba(59, 130, 246, 0.15) 0px,
+      rgba(59, 130, 246, 0.15) 1px,
+      transparent 1px,
+      transparent 40px
+    );
+  animation: gridPulse 3s ease-in-out infinite;
+}
+
+@keyframes gridPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ---- Blue hue/glow layer ---- */
+.hue-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(59, 130, 246, 0.08) 0%,
+    rgba(59, 130, 246, 0.02) 60%,
+    transparent 100%
+  );
+  mix-blend-mode: overlay;
+  animation: huePulse 4s ease-in-out infinite;
+}
+
+@keyframes huePulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* ---- Moving scanning line (glowing) ---- */
+.scanning-line {
+  position: absolute;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #3b82f6, #60a5fa, #3b82f6, transparent);
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.8), 0 0 60px rgba(59, 130, 246, 0.4);
+  animation: scanMove 2.5s ease-in-out infinite;
+  top: 0;
+  left: 0;
+}
+
+@keyframes scanMove {
+  0% { top: 0; opacity: 0.3; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0.3; }
+}
+
+/* ---- Corner brackets (enhanced with glow) ---- */
+.corner {
+  position: absolute;
+  width: 35px;
+  height: 35px;
+  border: 3px solid rgba(59, 130, 246, 0.9);
+  border-radius: 4px;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  animation: cornerPulse 2s ease-in-out infinite;
+}
+
+@keyframes cornerPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
+  50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.9); }
+}
+
+.corner.top-left {
+  top: 20px;
+  left: 20px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.corner.top-right {
+  top: 20px;
+  right: 20px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.corner.bottom-left {
+  bottom: 20px;
+  left: 20px;
+  border-right: none;
+  border-top: none;
+}
+
+.corner.bottom-right {
+  bottom: 20px;
+  right: 20px;
+  border-left: none;
+  border-top: none;
+}
