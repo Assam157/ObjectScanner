@@ -1,5 +1,5 @@
-import Scanner from './Scanner';
-import ObjectScene from './ObjectScene';
+import Scanner from './components/Scanner';
+import ObjectScene from './components/ObjectScene';
 import { useState } from 'react';
 
 function App() {
