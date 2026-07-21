@@ -1,4 +1,4 @@
- import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 // =============================================
 // CONFIGURATION
@@ -84,14 +84,12 @@ function Scanner({ onResult, onCapture, isScanning }) {
       return;
     }
 
-    // Capture image to canvas
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0);
 
-    // Convert to blob and create file
     const blob = await new Promise((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.95)
     );
@@ -101,14 +99,11 @@ function Scanner({ onResult, onCapture, isScanning }) {
     }
     const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
 
-    // Tell parent that scanning started
     if (onCapture) onCapture();
 
-    // Prepare form data
     const formData = new FormData();
     formData.append("image", file);
 
-    // Abort controller for cancellation
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -131,11 +126,9 @@ function Scanner({ onResult, onCapture, isScanning }) {
     } catch (error) {
       console.error("Scan error:", error);
       alert("❌ Scan failed. Check your connection or try again.");
-      // Optionally call onResult with null to reset
       if (onResult) onResult(null);
     } finally {
       abortControllerRef.current = null;
-      // Parent will handle isScanning via prop – we don't set it here
     }
   }, [onCapture, onResult]);
 
@@ -165,7 +158,7 @@ function Scanner({ onResult, onCapture, isScanning }) {
           style={{ display: isCameraReady ? "block" : "none" }}
         />
 
-        {/* Fallback when camera is off or error */}
+        {/* Fallback states */}
         {!isCameraReady && !cameraError && (
           <div className="camera-placeholder">
             <div className="spinner-small"></div>
@@ -182,7 +175,27 @@ function Scanner({ onResult, onCapture, isScanning }) {
           </div>
         )}
 
-        {/* Scanning overlay (controlled by parent via isScanning) */}
+        {/* 🆕 Modern scanner overlay (blue grid + line + corners) */}
+        {isCameraReady && !isScanning && (
+          <div className="scanning-overlay">
+            {/* Blue grid pattern */}
+            <div className="grid-overlay"></div>
+
+            {/* Blue hue/glow layer */}
+            <div className="hue-overlay"></div>
+
+            {/* Moving scanning line */}
+            <div className="scanning-line"></div>
+
+            {/* Corner brackets */}
+            <div className="corner top-left"></div>
+            <div className="corner top-right"></div>
+            <div className="corner bottom-left"></div>
+            <div className="corner bottom-right"></div>
+          </div>
+        )}
+
+        {/* Scanning spinner (processing) */}
         {isScanning && (
           <div className="scan-overlay">
             <div className="spinner"></div>
@@ -191,7 +204,7 @@ function Scanner({ onResult, onCapture, isScanning }) {
         )}
       </div>
 
-      {/* Capture button – round, disabled while scanning */}
+      {/* Capture button */}
       <button
         className="capture-btn"
         onClick={captureAndScan}
@@ -200,7 +213,6 @@ function Scanner({ onResult, onCapture, isScanning }) {
         <span className="capture-circle"></span>
       </button>
 
-      {/* Hidden canvas for capture */}
       <canvas ref={canvasRef} style={{ display: "none" }} />
     </div>
   );
