@@ -1,131 +1,27 @@
- import { useState } from "react";
-
-import Scanner from "./components/Scanner";
-import ChairPage from "./components/ChairPage";
-import MonitorPage from "./components/MonitorPage";
-import HammerPage from "./components/HammerPage";
-import ScissorPage from "./components/ScissorPage";
-import SpoonPage from "./components/SpoonPage";
-import NotFoundPage from "./components/NotFoundPage";
-
-import "./App.css";
+ import Scanner from './Scanner';
+import ObjectScene from './ObjectScene';
 
 function App() {
+  const [result, setResult] = useState(null);
 
-  const [page, setPage] = useState("scanner");
-
-  const [result, setResult] = useState({
-    image: "",
-    confidence: 0,
-    object: ""
-  });
-
-  const showResult = (data) => {
-
+  const handleResult = (data) => {
     setResult(data);
-
-    switch ((data.object || "").toLowerCase()) {
-
-      case "chair":
-        setPage("chair");
-        break;
-
-      case "monitor":
-      case "tv":
-      case "tvmonitor":
-        setPage("monitor");
-        break;
-
-      case "hammer":
-        setPage("hammer");
-        break;
-
-      case "scissor":
-      case "scissors":
-        setPage("scissor");
-        break;
-
-      case "spoon":
-        setPage("spoon");
-        break;
-
-      default:
-        setPage("notfound");
-        break;
-
-    }
-
   };
 
   return (
-
-    <div className="App">
-
-      {page === "scanner" && (
-
-        <Scanner
-          onResult={showResult}
-        />
-
+    <div>
+      {result ? (
+        <div>
+          <h2>Detected: {result.object}</h2>
+          <p>Confidence: {result.confidence}</p>
+          <div style={{ width: '100%', height: '400px' }}>
+            <ObjectScene objectType={result.object} />
+          </div>
+          <button onClick={() => setResult(null)}>Scan Again</button>
+        </div>
+      ) : (
+        <Scanner onResult={handleResult} />
       )}
-
-      {page === "chair" && (
-
-        <ChairPage
-          result={result}
-          goHome={() => setPage("scanner")}
-        />
-
-      )}
-
-      {page === "monitor" && (
-
-        <MonitorPage
-          result={result}
-          goHome={() => setPage("scanner")}
-        />
-
-      )}
-
-      {page === "hammer" && (
-
-        <HammerPage
-          result={result}
-          goHome={() => setPage("scanner")}
-        />
-
-      )}
-
-      {page === "scissor" && (
-
-        <ScissorPage
-          result={result}
-          goHome={() => setPage("scanner")}
-        />
-
-      )}
-
-      {page === "spoon" && (
-
-        <SpoonPage
-          result={result}
-          goHome={() => setPage("scanner")}
-        />
-
-      )}
-
-      {page === "notfound" && (
-
-        <NotFoundPage
-          goHome={() => setPage("scanner")}
-        />
-
-      )}
-
     </div>
-
   );
-
 }
-
-export default App;
