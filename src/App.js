@@ -1,6 +1,7 @@
 import Scanner from './components/Scanner';
 import ObjectScene from './components/ObjectScene';
 import { useState } from 'react';
+import "./App.css";
 
 function App() {
   const [result, setResult] = useState(null);
