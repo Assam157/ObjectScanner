@@ -1,5 +1,6 @@
- import Scanner from './components/Scanner';
-import ObjectScene from './components/ObjectScene';
+import Scanner from './Scanner';
+import ObjectScene from './ObjectScene';
+import { useState } from 'react';
 
 function App() {
   const [result, setResult] = useState(null);
@@ -25,3 +26,5 @@ function App() {
     </div>
   );
 }
+
+export default App;   // <-- THIS MUST BE PRESENT
