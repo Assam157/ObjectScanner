@@ -8,7 +8,7 @@
 // You can override this with an environment variable if needed.
 const BACKEND_URL =
   process.env.REACT_APP_BACKEND_URL ||
-  "https://late-bobcats-tan.loca.lt";
+  " https://ascent-halt-glorify.ngrok-free.dev";
 
 // =============================================
 
