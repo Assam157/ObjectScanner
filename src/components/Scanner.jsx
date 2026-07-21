@@ -1,19 +1,35 @@
-  import { useEffect, useRef, useState } from "react";
- 
+import { useState } from "react";
 
-const API_URL = "https://objectscannerbackend.onrender.com";
+// =============================================
+// CONFIGURATION
+// =============================================
+
+// Automatically determine the local backend.
+// - Laptop (localhost): http://localhost:5000
+// - Phone on same Wi-Fi: http://<laptop-ip>:5000
+
+const LOCAL_BASE_URL =
+  process.env.REACT_APP_LOCAL_URL ||
+  (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+      ? "http://localhost:5000"
+      : `${window.location.protocol}//${window.location.hostname}:5000`
+  );
+
+// Hosted Render backend (fallback)
+const FALLBACK_BASE_URL = "https://objectscannerbackend.onrender.com";
+
+// Wait before falling back to cloud
+const LOCAL_TIMEOUT_MS = 25000;
+
+// =============================================
 
 function Scanner({ onResult }) {
 
     const [selectedImage, setSelectedImage] = useState(null);
     const [loading, setLoading] = useState(false);
-
-    const [cameraOn, setCameraOn] = useState(false);
-    const [facingMode, setFacingMode] = useState("environment");
-
-    const videoRef = useRef(null);
-    const canvasRef = useRef(null);
-    const streamRef = useRef(null);
+    const [statusMessage, setStatusMessage] = useState("");
 
     const handleFile = (e) => {
 
@@ -21,211 +37,97 @@ function Scanner({ onResult }) {
 
         if (!file) return;
 
-        stopCamera();
-
         setSelectedImage(file);
-
     };
 
-    const stopCamera = () => {
+    const scanImage = async () => {
 
-        if (streamRef.current) {
+        if (!selectedImage) {
 
-            streamRef.current.getTracks().forEach(track => track.stop());
-
-            streamRef.current = null;
-
+            alert("Please select an image first.");
+            return;
         }
 
-        if (videoRef.current) {
-
-            videoRef.current.srcObject = null;
-
-        }
-
-        setCameraOn(false);
-
-    };
-
-    const startCamera = async () => {
-
-        stopCamera();
-
-        setSelectedImage(null);
-
-        setCameraOn(true);
-
-    };
-
-    useEffect(() => {
-
-        if (!cameraOn) return;
-
-        const openCamera = async () => {
-
-            try {
-
-                const stream = await navigator.mediaDevices.getUserMedia({
-
-                    video: {
-
-                        facingMode: facingMode
-
-                    },
-
-                    audio: false
-
-                });
-
-                streamRef.current = stream;
-
-                if (videoRef.current) {
-
-                    videoRef.current.srcObject = stream;
-
-                    await videoRef.current.play();
-
-                }
-
-            }
-
-            catch (err) {
-
-                console.error(err);
-
-                alert("Unable to access camera.");
-
-                stopCamera();
-
-            }
-
-        };
-
-        openCamera();
-
-        return () => {
-
-            if (streamRef.current) {
-
-                streamRef.current.getTracks().forEach(track => track.stop());
-
-            }
-
-        };
-
-    }, [cameraOn, facingMode]);
-
-    useEffect(() => {
-
-        return () => stopCamera();
-
-    }, []);
-
-    const captureImage = () => {
-
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-
-        if (!video || !canvas) return;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        const ctx = canvas.getContext("2d");
-
-        ctx.drawImage(video, 0, 0);
-
-        canvas.toBlob(
-
-            (blob) => {
-
-                if (!blob) return;
-
-                const file = new File(
-
-                    [blob],
-
-                    "capture.jpg",
-
-                    {
-
-                        type: "image/jpeg"
-
-                    }
-
-                );
-
-                setSelectedImage(file);
-
-                stopCamera();
-
-            },
-
-            "image/jpeg",
-
-            0.95
-
-        );
-
-    };
-  const scanImage = async () => {
-
-    if (!selectedImage) {
-        alert("Please upload or capture an image first.");
-        return;
-    }
-
-    setLoading(true);
-
-    try {
+        setLoading(true);
+        setStatusMessage("📡 Connecting to local backend...");
 
         const formData = new FormData();
         formData.append("image", selectedImage);
 
-        const response = await fetch(`${API_URL}/detect`, {
-            method: "POST",
-            body: formData
-        });
+        const controller = new AbortController();
 
-        console.log("HTTP Status:", response.status);
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+        }, LOCAL_TIMEOUT_MS);
 
-        const contentType = response.headers.get("content-type");
+        try {
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Server Error:", errorText);
-            throw new Error(`Server Error (${response.status})`);
+            const response = await fetch(`${LOCAL_BASE_URL}/detect`, {
+                method: "POST",
+                body: formData,
+                signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                throw new Error(`Local server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            setStatusMessage("");
+            setLoading(false);
+
+            onResult(data);
+
+            return;
+
+        } catch (error) {
+
+            clearTimeout(timeoutId);
+
+            console.warn("Local backend failed:", error.message);
+
+            setStatusMessage("☁️ Local unavailable. Trying cloud backend...");
+
+            try {
+
+                const response = await fetch(`${FALLBACK_BASE_URL}/detect`, {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Cloud server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                setLoading(false);
+
+                setStatusMessage("☁️ Connected to cloud backend");
+
+                setTimeout(() => {
+                    setStatusMessage("");
+                }, 3000);
+
+                onResult(data);
+
+                return;
+
+            } catch (fallbackError) {
+
+                console.error(fallbackError);
+
+                setLoading(false);
+
+                setStatusMessage("");
+
+                alert("❌ Unable to reach both the local and cloud backends.");
+            }
         }
-
-        if (!contentType || !contentType.includes("application/json")) {
-            const text = await response.text();
-            console.error("Unexpected Response:", text);
-            throw new Error("Backend did not return JSON.");
-        }
-
-        const data = await response.json();
-
-        console.log("Backend Response:", data);
-
-        if (!data.success) {
-            throw new Error(data.message || "Detection failed.");
-        }
-
-        onResult(data);
-
-    } catch (err) {
-
-        console.error("Scan Error:", err);
-
-        alert(err.message);
-
-    } finally {
-
-        setLoading(false);
-
-    }
-
-};
+    };
 
     return (
 
@@ -233,223 +135,65 @@ function Scanner({ onResult }) {
 
             <div className="hero">
 
-                <h1>
-
-                    🧠 AI Object Scanner
-
-                </h1>
+                <h1>🧠 AI Object Scanner</h1>
 
                 <p>
-
-                    Upload an image or use the live camera.
-
+                    Upload or capture an image.
+                    <br /><br />
+                    Our AI detects Chairs and Monitors instantly.
                 </p>
 
             </div>
 
             <div className="card">
 
-                <h2>
-
-                    Upload or Capture
-
-                </h2>
+                <h2>Upload Image</h2>
 
                 <br />
 
                 <input
-
                     type="file"
-
                     accept="image/*"
-
+                    capture="environment"
                     onChange={handleFile}
-
                 />
 
                 <br />
-
                 <br />
 
-                {
+                {selectedImage && (
 
-                    !cameraOn &&
+                    <img
+                        className="preview"
+                        src={URL.createObjectURL(selectedImage)}
+                        alt="Preview"
+                    />
 
-                    <button
+                )}
 
-                        onClick={startCamera}
+                <br />
+                <br />
 
+                {statusMessage && (
+
+                    <p
+                        style={{
+                            color: "#666",
+                            fontStyle: "italic",
+                            marginBottom: "10px"
+                        }}
                     >
+                        {statusMessage}
+                    </p>
 
-                        📷 Open Camera
-
-                    </button>
-
-                }
-
-                {
-
-                    cameraOn &&
-
-                    <>
-
-                        <br />
-
-                        <br />
-
-                        <video
-
-                            ref={videoRef}
-
-                            autoPlay
-
-                            playsInline
-
-                            muted
-
-                            className="preview"
-
-                            style={{
-
-                                width: "100%",
-
-                                maxWidth: "500px",
-
-                                background: "#000",
-
-                                borderRadius: "12px"
-
-                            }}
-
-                        />
-
-                        <br />
-
-                        <br />
-
-                        <div
-
-                            style={{
-
-                                display: "flex",
-
-                                gap: "10px",
-
-                                justifyContent: "center",
-
-                                flexWrap: "wrap"
-
-                            }}
-
-                        >
-
-                            <button
-
-                                onClick={captureImage}
-
-                            >
-
-                                📸 Capture
-
-                            </button>
-
-                            <button
-
-                                onClick={() =>
-
-                                    setFacingMode(
-
-                                        prev =>
-
-                                            prev === "environment"
-
-                                                ? "user"
-
-                                                : "environment"
-
-                                    )
-
-                                }
-
-                            >
-
-                                🔄 Switch Camera
-
-                            </button>
-
-                            <button
-
-                                onClick={stopCamera}
-
-                            >
-
-                                ❌ Close
-
-                            </button>
-
-                        </div>
-
-                    </>
-
-                }
-
-                <canvas
-
-                    ref={canvasRef}
-
-                    style={{
-
-                        display: "none"
-
-                    }}
-
-                />
-
-                {
-
-                    selectedImage && !cameraOn &&
-
-                    <>
-
-                        <br />
-
-                        <br />
-
-                        <img
-
-                            src={URL.createObjectURL(selectedImage)}
-
-                            alt="Preview"
-
-                            className="preview"
-
-                        />
-
-                    </>
-
-                }
-
-                <br />
-
-                <br />
+                )}
 
                 <button
-
                     onClick={scanImage}
-
                     disabled={loading}
-
                 >
 
-                    {
-
-                        loading
-
-                            ? "Scanning..."
-
-                            : "🔍 Scan Image"
-
-                    }
+                    {loading ? "Scanning..." : "🔍 Scan Image"}
 
                 </button>
 
@@ -457,25 +201,21 @@ function Scanner({ onResult }) {
 
             <div className="card">
 
-                <h2>
-
-                    How it Works
-
-                </h2>
+                <h2>How it Works</h2>
 
                 <br />
 
                 <p>
 
-                    📷 Upload or capture an image.
+                    📷 Capture or upload an image
 
                     <br /><br />
 
-                    🤖 YOLO detects objects.
+                    🤖 YOLO detects the object
 
                     <br /><br />
 
-                    📄 Information opens automatically.
+                    📄 Information page opens automatically
 
                 </p>
 
@@ -484,7 +224,6 @@ function Scanner({ onResult }) {
         </div>
 
     );
-
 }
 
-export default Scanner;   
+export default Scanner;
